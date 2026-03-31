@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.orm import Session
 from database import get_db
 from recommender.tmdb import (
     fetch_popular_movies, fetch_trending_movies,
-    fetch_movies_by_genre, search_movies, fetch_genres, get_image_url
+    fetch_movies_by_genre, search_movies, fetch_genres,
+    get_image_url, fetch_movie_trailer
 )
 import models
 
@@ -14,12 +15,10 @@ def save_movies_to_db(movies_data: list, db: Session):
     for m in movies_data:
         existing = db.query(models.Movie).filter_by(tmdb_id=m["id"]).first()
         if not existing:
-            # genre_ids is a list of ints from TMDB, just convert to string
             genre_ids = m.get("genre_ids", [])
             if isinstance(genre_ids, list) and len(genre_ids) > 0 and isinstance(genre_ids[0], int):
                 genres = ",".join(str(g) for g in genre_ids)
             else:
-                # already full genre objects
                 genres = ",".join([g.get("name", "") for g in m.get("genres", [])])
 
             movie = models.Movie(
@@ -38,7 +37,6 @@ def save_movies_to_db(movies_data: list, db: Session):
     db.commit()
     return saved
 
-# Genre ID to name mapping from TMDB
 GENRE_MAP = {
     28: "Action", 12: "Adventure", 16: "Animation", 35: "Comedy",
     80: "Crime", 99: "Documentary", 18: "Drama", 10751: "Family",
@@ -48,7 +46,6 @@ GENRE_MAP = {
 }
 
 def movie_to_dict(m: models.Movie):
-    # Convert genre IDs or names to list
     if m.genres:
         parts = m.genres.split(",")
         genres = []
@@ -99,10 +96,27 @@ def search(q: str = Query(...), db: Session = Depends(get_db)):
 def genres():
     return fetch_genres()
 
+@router.get("/{movie_id}/trailer")
+def get_trailer(movie_id: int, db: Session = Depends(get_db)):
+    movie = db.query(models.Movie).filter_by(id=movie_id).first()
+    if not movie:
+        raise HTTPException(status_code=404, detail="Movie not found")
+    trailer_key = fetch_movie_trailer(movie.tmdb_id)
+    return {"trailer_key": trailer_key}
+
 @router.get("/{movie_id}")
 def get_movie(movie_id: int, db: Session = Depends(get_db)):
-    from fastapi import HTTPException
     movie = db.query(models.Movie).filter_by(id=movie_id).first()
     if not movie:
         raise HTTPException(status_code=404, detail="Movie not found")
     return movie_to_dict(movie)
+@router.get("/by-genre")
+def movies_by_genre(genre_id: int, db: Session = Depends(get_db)):
+    from recommender.tmdb import fetch_movies_by_genre
+    data = fetch_movies_by_genre(genre_id)
+    save_movies_to_db(data, db)
+    # Filter DB movies that contain this genre_id
+    movies = db.query(models.Movie).filter(
+        models.Movie.genres.contains(str(genre_id))
+    ).order_by(models.Movie.popularity.desc()).limit(20).all()
+    return [movie_to_dict(m) for m in movies]

@@ -27,7 +27,7 @@ export default function Navbar() {
       <div style={{ display: "flex", alignItems: "center", gap: "40px" }}>
         <span className="navbar-logo" onClick={() => navigate("/")}>NETFIX</span>
         <div className="navbar-links">
-          <span className="navbar-link" onClick={() => navigate("/")}>Home</span>
+          <span className="navbar-link" onClick={() => navigate("/home")}>Home</span>
           <span className="navbar-link" onClick={() => navigate("/watchlist")}>My List</span>
           <span className="navbar-link" onClick={() => navigate("/social")}>Friends</span>
           <span className="navbar-link">Movies</span>

@@ -1,12 +1,12 @@
 fastapi
 uvicorn
 sqlalchemy
+bcrypt
 python-jose[cryptography]
-passlib[bcrypt]
 python-dotenv
 requests
+python-multipart
 scikit-learn
-scikit-surprise
 pandas
 numpy
-python-multipart
+pydantic[email]
